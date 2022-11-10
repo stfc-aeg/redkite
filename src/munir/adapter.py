@@ -1,6 +1,6 @@
-"""Redkite adapter.
+"""Munir adapter.
 
-Redkite HiBIRDS/DPDK packet capture integration adapter.
+Munir HiBIRDS/DPDK packet capture integration adapter.
 
 Author: Tim Nicholls, STFC Detector Systems Software Group
 """
@@ -11,12 +11,12 @@ from odin.adapters.adapter import ApiAdapter
 from odin.adapters.parameter_tree import ParameterTreeError
 from odin.util import decode_request_body
 
-from .controller import RedkiteController
-from .util import RedkiteError
+from .controller import MunirController
+from .util import MunirError
 
 
-class RedkiteAdapter(ApiAdapter):
-    """Redkit adapter for HiBIRDS/DPDK control integration."""
+class MunirAdapter(ApiAdapter):
+    """Munir adapter for HiBIRDS/DPDK control integration."""
 
     def __init__(self, **kwargs):
         """Initialise the adapter object.
@@ -31,9 +31,9 @@ class RedkiteAdapter(ApiAdapter):
         cmd_path = str(self.options.get('cmd_path', 'unknown'))
 
         # Create the controller instance
-        self.controller = RedkiteController(cmd_path)
+        self.controller = MunirController(cmd_path)
 
-        logging.debug("RedkiteAdapter loaded")
+        logging.debug("MunirAdapter loaded")
 
     def initialize(self, adapters):
         """Initlialise the adapter.
@@ -41,7 +41,7 @@ class RedkiteAdapter(ApiAdapter):
         This method stops the background tasks, allowing the adapter state to be cleaned up
         correctly.
         """
-        logging.debug("RedkiteAdapter initalize called with %d adapters", len(adapters))
+        logging.debug("MunirAdapter initalize called with %d adapters", len(adapters))
         self.controller.initialize()
 
     @response_types('application/json', default='application/json')
@@ -84,7 +84,7 @@ class RedkiteAdapter(ApiAdapter):
             data = decode_request_body(request)
             response = self.controller.set(path, data)
             status_code = 200
-        except (ParameterTreeError, RedkiteError) as e:
+        except (ParameterTreeError, MunirError) as e:
             response = {'error': str(e)}
             status_code = 400
 
@@ -97,5 +97,5 @@ class RedkiteAdapter(ApiAdapter):
 
         This method allows the adapter and controller state to be cleaned up correctly.
         """
-        logging.debug("RedkitAdapter cleanup called")
+        logging.debug("MunirAdapter cleanup called")
         self.controller.cleanup()

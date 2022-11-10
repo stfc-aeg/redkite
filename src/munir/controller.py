@@ -1,6 +1,6 @@
-"""Redkite controller class.
+"""Munir controller class.
 
-This class implements the Redkite controller, which is responsible for configuring and
+This class implements the Munir controller, which is responsible for configuring and
 executing the HiBIRDS/DPDK packet capture application as a subprocess. Various parameters
 of the application can be configured via a parameter tree, and the state of the executed process
 and its output are captured and exposed to the adapter.
@@ -15,10 +15,10 @@ from tornado.concurrent import run_on_executor
 
 from odin.adapters.parameter_tree import ParameterTree
 
-from .util import RedkiteError
+from .util import MunirError
 
 
-class RedkiteController():
+class MunirController():
     """Main class for the controller object."""
 
     # Thread executor used for process execution
@@ -117,7 +117,7 @@ class RedkiteController():
 
         :param file_path: path to write output files to
         """
-        logging.debug("RedkiteAdapter set_file_path called with path %s", file_path)
+        logging.debug("MunirAdapter set_file_path called with path %s", file_path)
         self.file_path = file_path
 
     def set_file_name(self, file_name):
@@ -127,7 +127,7 @@ class RedkiteController():
 
         :param file_name: name of the output file
         """
-        logging.debug("RedkiteAdapter set_file_name called with name %s", file_name)
+        logging.debug("MunirAdapter set_file_name called with name %s", file_name)
         self.file_name = file_name
 
     def set_num_frames(self, num_frames):
@@ -137,7 +137,7 @@ class RedkiteController():
 
         :param num_frames: number of frames
         """
-        logging.debug("RedkiteAdapter set_num_frames called with name %d", num_frames)
+        logging.debug("MunirAdapter set_num_frames called with name %d", num_frames)
         self.num_frames = num_frames
 
     def set_num_files(self, num_files):
@@ -147,7 +147,7 @@ class RedkiteController():
 
         :param num_files: number of files
         """
-        logging.debug("RedkiteAdapter set_num_files called with name %d", num_files)
+        logging.debug("MunirAdapter set_num_files called with name %d", num_files)
         self.num_files = num_files
 
     def set_execute(self, value):
@@ -160,14 +160,14 @@ class RedkiteController():
 
         :param value: execution flag value to set (True triggers excecution)
         """
-        logging.debug("RedkiteAdapter set_execute called with value %s", value)
+        logging.debug("MunirAdapter set_execute called with value %s", value)
 
         if value:
             if not self.executing:
                 logging.debug("Trigger command execution")
                 self.do_execute = True
             else:
-                raise RedkiteError("Cannot trigger execution while command is already running")
+                raise MunirError("Cannot trigger execution while command is already running")
 
     @run_on_executor
     def _execute_cmd(self):
