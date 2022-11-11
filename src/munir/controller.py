@@ -8,8 +8,11 @@ and its output are captured and exposed to the adapter.
 Author: Tim Nicholls, STFC Detector Systems Software Group
 """
 import logging
+import re
 import subprocess
+from ast import literal_eval
 from concurrent import futures
+from functools import partial
 
 from tornado.concurrent import run_on_executor
 
@@ -24,23 +27,17 @@ class MunirController():
     # Thread executor used for process execution
     executor = futures.ThreadPoolExecutor(max_workers=1)
 
-    def __init__(self, cmd_path):
+    def __init__(self, cmd_template):
         """Initialise the controller object.
 
         This constructor initlialises the controller object, building a parameter tree to control
         the packet capture application parameters and report status of execution
         """
-        # Set the capture command path
-        self.cmd_path = cmd_path
+        self.args = self.parse_cmd_template(cmd_template)
 
         # Initialise the state of control and status parameters
         self.executing = False
         self.do_execute = False
-
-        self.file_path = "/tmp"
-        self.file_name = "capture.bin"
-        self.num_frames = 100000
-        self.num_files = 1
 
         self.return_code = None
         self.last_command = None
@@ -50,12 +47,9 @@ class MunirController():
 
         # Build the parameter tree
         self.param_tree = ParameterTree({
-            'cmd_path': self.cmd_path,
-            'file_path': (lambda: self.file_path, self.set_file_path),
-            'file_name': (lambda: self.file_name, self.set_file_name),
-            'num_frames': (lambda: self.num_frames, self.set_num_frames),
-            'num_files': (lambda: self.num_files, self.set_num_files),
+            'cmd_template': self.cmd_template,
             'execute': (lambda: self.executing, self.set_execute),
+            'args': self.args,
             'status': {
                 'executing': (lambda: self.executing, None),
                 'return_code': (lambda: self.return_code, None),
@@ -65,6 +59,99 @@ class MunirController():
                 'exception': (lambda: self.exception, None),
             }
         })
+
+    def parse_cmd_template(self, cmd_template):
+        """Parse the command template and initialise modifiable arguments.
+
+        This method parses the specified command template, identifying modifable arguments specified
+        by template substitutions (marked with curly braces) and building a dictionary of those
+        arguments initialised with default values if given and structured as parameter accessor
+        getter/setter pairs for use in a parameter tree.
+
+        :param cmd_template: command template as a string
+        :return args: dictionary of modifiable arguments with parameter accessor pairs
+        """
+        # Initialise internal state of arguments and full command argument list
+        self._args = {}
+        self.cmd_args = []
+        args = {}
+
+        def get_arg(name):
+            """Get the current value of a command argument.
+
+            This inner function returns the current value of the named command argument, and is
+            used to dynamically generate getter partials for modifiable parameters
+
+            :param name: name of argument
+            :return current value of argument
+            """
+            return self._args[name]
+
+        def set_arg(name, value):
+            """Set the current value of a command argument.
+
+            This inner function returns the current value of the named command argument, and is
+            used to dynamically generate setter partials for modifiable parameters
+
+            :param name: name of argument
+            :param value: value to set argument to
+            """
+            logging.debug("Setting command argument %s to %s", name, value)
+
+            self._args[name] = value
+
+        # Strip any line breaks from the command template and store
+        self.cmd_template = cmd_template.replace('\n', ' ')
+        if not self.cmd_template:
+            logging.error("No command template specified")
+            return args
+
+        # Iterate through arguments in command template and build a dict of settable arguments to
+        # return. Also construct a list of getters for the full command argument list to allow
+        # the command to be built at execution time.
+        for arg in self.cmd_template.split(' '):
+
+            # If the current argument is a template subsitution marked with curly braces, parse to
+            # into the settable argument list. If a default value is specified, infer the argument
+            # type and set the initial value accordingly. If no default is given, assume the
+            # argument is a string and initalise empty.
+            param = re.match("^{(\S+)}$", arg)
+            if param:
+                # Extract the argument template elements
+                elems = param.group(1).split(':')
+                name = elems[0]
+                # If a default value is given, evaluate it
+                if len(elems) >= 2:
+                    try:
+                        value = literal_eval(elems[1])
+                    except:
+                        value = elems[1]
+                else:
+                    value = ""
+
+                # Set the initial value of the argument
+                self._args[name] = value
+
+                # Bind getter and setter partials into the argument dict
+                getter = partial(get_arg, name)
+                setter = partial(set_arg, name)
+                args[name] = (getter, setter)
+
+                # Append the argument getter to the full command argument list
+                self.cmd_args.append(getter)
+            else:
+                # If this argument is not a template subsitution, append a getter for the value of
+                # the argument to the full command argument list
+                self.cmd_args.append(lambda arg=arg: arg)
+
+        # Log a warning if parsing the command template did not yield an executable command
+        if not self.cmd_args:
+            logging.warning(
+                "Parsing the specified command template did not yield an executable command"
+            )
+
+        # Return the modifiable argument dict for use in a parameter tree
+        return args
 
     def initialize(self):
         """Initialize the controller instance.
@@ -110,46 +197,6 @@ class MunirController():
         # Return updated values from the tree
         return self.param_tree.get(path)
 
-    def set_file_path(self, file_path):
-        """Set the output file path.
-
-        This setter function sets the output file path passed to the executed application.
-
-        :param file_path: path to write output files to
-        """
-        logging.debug("MunirAdapter set_file_path called with path %s", file_path)
-        self.file_path = file_path
-
-    def set_file_name(self, file_name):
-        """Set the output file name.
-
-        This setter function sets the name of output file passed to the excecuted application.
-
-        :param file_name: name of the output file
-        """
-        logging.debug("MunirAdapter set_file_name called with name %s", file_name)
-        self.file_name = file_name
-
-    def set_num_frames(self, num_frames):
-        """Set the number of frames.
-
-        This setter function sets the number of frames to be written by the excecuted application.
-
-        :param num_frames: number of frames
-        """
-        logging.debug("MunirAdapter set_num_frames called with name %d", num_frames)
-        self.num_frames = num_frames
-
-    def set_num_files(self, num_files):
-        """Set the number of files.
-
-        This setter function sets the number of output file passed to the excecuted application.
-
-        :param num_files: number of files
-        """
-        logging.debug("MunirAdapter set_num_files called with name %d", num_files)
-        self.num_files = num_files
-
     def set_execute(self, value):
         """Set the command execution flag.
 
@@ -181,14 +228,8 @@ class MunirController():
         # Set executing flag
         self.executing = True
 
-        # Assemble command arguments
-        cmd_args = [
-            self.cmd_path, "udp_rx",
-            "--filename", self.file_name,
-            "--path", self.file_path,
-            "--frames", str(self.num_frames),
-            "--batches", str(self.num_files),
-        ]
+        # Assemble command argument list by evaluating current value of each argument
+        cmd_args = [str(arg()) for arg in self.cmd_args]
 
         # Retain the full command for debugging
         self.last_command = ' '.join([str(arg) for arg in cmd_args])

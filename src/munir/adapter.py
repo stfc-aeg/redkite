@@ -28,10 +28,10 @@ class MunirAdapter(ApiAdapter):
         super().__init__(**kwargs)
 
         # Parse options from configuration
-        cmd_path = str(self.options.get('cmd_path', 'unknown'))
+        cmd_template= str(self.options.get('cmd_template', ''))
 
         # Create the controller instance
-        self.controller = MunirController(cmd_path)
+        self.controller = MunirController(cmd_template)
 
         logging.debug("MunirAdapter loaded")
 
@@ -41,7 +41,7 @@ class MunirAdapter(ApiAdapter):
         This method stops the background tasks, allowing the adapter state to be cleaned up
         correctly.
         """
-        logging.debug("MunirAdapter initalize called with %d adapters", len(adapters))
+        logging.debug("MunirAdapter initialize called with %d adapters", len(adapters))
         self.controller.initialize()
 
     @response_types('application/json', default='application/json')
