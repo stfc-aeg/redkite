@@ -59,6 +59,7 @@ class MunirAdapter(ApiAdapter):
             status_code = 200
         except ParameterTreeError as e:
             response = {'error': str(e)}
+            logging.error("GET request to path %s failed with error: %s", path, str(e))
             status_code = 400
 
         content_type = 'application/json'
@@ -86,6 +87,7 @@ class MunirAdapter(ApiAdapter):
             status_code = 200
         except (ParameterTreeError, MunirError) as e:
             response = {'error': str(e)}
+            logging.error("PUT request to path %s failed with error: %s", path, str(e))
             status_code = 400
 
         return ApiAdapterResponse(
