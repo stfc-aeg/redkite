@@ -28,10 +28,11 @@ class MunirAdapter(ApiAdapter):
         super().__init__(**kwargs)
 
         # Parse options from configuration
-        cmd_template= str(self.options.get('cmd_template', ''))
+        cmd_template = str(self.options.get('cmd_template', ''))
+        timeout = int(self.options.get('timeout', 10))
 
         # Create the controller instance
-        self.controller = MunirController(cmd_template)
+        self.controller = MunirController(cmd_template, timeout)
 
         logging.debug("MunirAdapter loaded")
 

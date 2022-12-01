@@ -27,13 +27,19 @@ class MunirController():
     # Thread executor used for process execution
     executor = futures.ThreadPoolExecutor(max_workers=1)
 
-    def __init__(self, cmd_template):
+    def __init__(self, cmd_template, timeout):
         """Initialise the controller object.
 
         This constructor initlialises the controller object, building a parameter tree to control
-        the packet capture application parameters and report status of execution
+        the target command parameters and report status of execution. The target command is
+        specified in template form, with modifiable arguments and their default values expressed
+        in curly braces, e.g. {file_name:test.txt}
+
+        :param cmd_template: template of command to execute
+        :param timeout: command execution timeout in seconds
         """
         self.args = self.parse_cmd_template(cmd_template)
+        self.timeout = timeout
 
         # Initialise the state of control and status parameters
         self.executing = False
@@ -49,6 +55,7 @@ class MunirController():
         self.param_tree = ParameterTree({
             'cmd_template': self.cmd_template,
             'execute': (lambda: self.executing, self.set_execute),
+            'timeout': (lambda: self.timeout, self.set_timeout),
             'args': self.args,
             'status': {
                 'executing': (lambda: self.executing, None),
@@ -115,7 +122,7 @@ class MunirController():
             # into the settable argument list. If a default value is specified, infer the argument
             # type and set the initial value accordingly. If no default is given, assume the
             # argument is a string and initalise empty.
-            param = re.match("^{(\S+)}$", arg)
+            param = re.match(r"^{(\S+)}$", arg)
             if param:
                 # Extract the argument template elements
                 elems = param.group(1).split(':')
@@ -124,7 +131,7 @@ class MunirController():
                 if len(elems) >= 2:
                     try:
                         value = literal_eval(elems[1])
-                    except:
+                    except Exception:
                         value = elems[1]
                 else:
                     value = ""
@@ -207,7 +214,7 @@ class MunirController():
 
         :param value: execution flag value to set (True triggers excecution)
         """
-        logging.debug("MunirAdapter set_execute called with value %s", value)
+        logging.debug("MunirController set_execute called with value %s", value)
 
         if value:
             if not self.executing:
@@ -215,6 +222,16 @@ class MunirController():
                 self.do_execute = True
             else:
                 raise MunirError("Cannot trigger execution while command is already running")
+
+    def set_timeout(self, value):
+        """Set the command execution timeout.
+
+        This setting method sets the command execution timeout in seconds.
+
+        :param value: value of the timeout set to set in seconds.
+        """
+        logging.debug("MunirController set_timeout called with value %d", value)
+        self.timeout = value
 
     @run_on_executor
     def _execute_cmd(self):
@@ -239,7 +256,12 @@ class MunirController():
         # Execute the command in a subprocess, capturing the result in status parameters. Exceptions
         # are also trapped and recorded in parameters.
         try:
-            result = subprocess.run(cmd_args, capture_output=True)
+            result = subprocess.run(cmd_args, capture_output=True, timeout=self.timeout)
+        except subprocess.TimeoutExpired:
+            error = "Execution of command timed out after {:d} seconds".format(self.timeout)
+            logging.error(error)
+            self.exception = error
+            self.return_code = -1
         except (TypeError, subprocess.SubprocessError) as error:
             logging.error("Execution of command failed: %s", error)
             self.exception = str(error)
