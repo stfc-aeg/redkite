@@ -1,4 +1,5 @@
 import logging
+import os
 
 from functools import partial
 
@@ -220,6 +221,9 @@ class MunirFpController():
         return all_responses_valid
 
     def execute_acquisition(self):
+
+        if not os.path.exists(self.file_path):
+            os.makedirs(self.file_path)
 
         logging.debug("Executing acquisition")
 
