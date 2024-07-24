@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: munir
+Version: 0+untagged.1.g254280b.dirty
+Author: Tim Nicholls
+Author-email: tim.nicholls@stfc.ac.uk
+Provides-Extra: test
+License-File: LICENSE

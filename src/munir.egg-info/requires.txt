@@ -1,0 +1,8 @@
+odin-data@ git+https://github.com/odin-detector/odin-data@1.9.0#subdirectory=python
+
+[test]
+pytest
+pytest-cov
+tox
+flake8
+flake8-docstrings
