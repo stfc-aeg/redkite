@@ -1,7 +1,7 @@
+import logging
 import zmq
 import json
 from datetime import datetime
-from typing import Dict, Any, Optional
 
 class OdinData:
     """
@@ -19,12 +19,12 @@ class OdinData:
         self.socket = self.context.socket(zmq.DEALER)
         self.socket.connect(endpoint)
         self.zmq_id = self.socket.getsockopt(zmq.IDENTITY)
-        self.status: Dict[str, Any] = {}
-        self.config: Dict[str, Any] = {}
+        self.status = {}
+        self.config = {}
         self.msg_id = 0
         self.ctrl_timeout = 0.0
 
-    def _send_receive(self, msg_type: str, msg_val: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _send_receive(self, msg_type, msg_val, params=None):
         """
         Send a message to the Odin-Data application and receive the response.
 
@@ -47,9 +47,10 @@ class OdinData:
         if self.socket.poll(5000):  # Wait for 5 seconds
             return self.socket.recv_json()
         else:
-            raise TimeoutError(f"No response from {self.endpoint} within timeout.")
+            logging.error(f"No response from {self.endpoint} within timeout.")
+            return {}
 
-    def set_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    def set_config(self, config):
         """
         Set the configuration for the Odin-Data application.
 
@@ -61,7 +62,7 @@ class OdinData:
             self.config.update(config)
         return response
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self):
         """
         Get the current status of the Odin-Data application.
 
@@ -72,7 +73,7 @@ class OdinData:
             self.status = response['params']
         return self.status
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self):
         """
         Get the current configuration of the Odin-Data application.
 
@@ -83,7 +84,7 @@ class OdinData:
             self.config = response['params']
         return self.config
 
-    def create_acquisition(self, path: str, acquisition_id: str, frames: int) -> bool:
+    def create_acquisition(self, path, acquisition_id, frames):
         """
         Create an acquisition setup.
 
@@ -121,7 +122,7 @@ class OdinData:
 
         return bool(self.set_config(acquisition_config))
 
-    def start_acquisition(self) -> bool:
+    def start_acquisition(self):
         """
         Start the acquisition process.
 
@@ -142,7 +143,7 @@ class OdinData:
 
         return bool(self.set_config(start_config))
 
-    def stop_acquisition(self) -> bool:
+    def stop_acquisition(self):
         """
         Stop the acquisition process.
 
