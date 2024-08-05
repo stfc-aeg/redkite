@@ -8,7 +8,7 @@ class OdinData:
     A class to manage connections and interactions with Odin-Data C++ applications.
     """
 
-    def __init__(self, endpoint: str):
+    def __init__(self, endpoint, config_path, timeout):
         """
         Initialize the OdinData connection.
 
@@ -22,7 +22,9 @@ class OdinData:
         self.status = {}
         self.config = {}
         self.msg_id = 0
-        self.ctrl_timeout = 0.0
+        self.ctrl_timeout = timeout
+
+        self.load_config(config_path)
 
     def _send_receive(self, msg_type, msg_val, params=None):
         """
@@ -41,14 +43,27 @@ class OdinData:
             'id': self.msg_id,
             'params': params or {}
         }
-        
+
         self.socket.send_json(message)
-        
-        if self.socket.poll(5000):  # Wait for 5 seconds
+        if self.socket.poll(int(self.ctrl_timeout*1000)):
             return self.socket.recv_json()
         else:
-            logging.error(f"No response from {self.endpoint} within timeout.")
+            logging.error(f"No response from {self.endpoint} within timeout of: {self.ctrl_timeout}s .")
             return {}
+        
+    def load_config(self, path):
+        """
+        Load configuration from a JSON file.
+
+        :param config_file: Path to the JSON configuration file
+        """
+        try:
+            with open((f'{path}/odin_data_configs.json'), 'r') as file:
+                self.json_config = json.load(file)
+                logging.debug(self.json_config)
+        except Exception as e:
+            logging.error(f"Failed to load configuration file: {e}")
+            self.json_config = {}
 
     def set_config(self, config):
         """
@@ -93,6 +108,9 @@ class OdinData:
         :param frames: Number of frames for the acquisition
         :return: True if the acquisition was set up successfully, False otherwise
         """
+
+        # make setting of config generic, it needs to adapt to,different types of config
+        # json.loads string to dict 
         common_config = {
             "hibirdsdpdk": {
                 "update_config": True,

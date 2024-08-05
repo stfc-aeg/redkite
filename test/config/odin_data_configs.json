@@ -1,0 +1,48 @@
+{
+    "common_config": {
+      "hibirdsdpdk": {
+        "update_config": true,
+        "rx_enable": false,
+        "proc_enable": true,
+        "rx_frames": "frames"
+      },
+      "hdf": {
+        "write": false
+      }
+    },
+    "stop_config": {
+      "hibirdsdpdk": {
+        "update_config": true,
+        "rx_enable": false,
+        "proc_enable": true
+      },
+      "hdf": {
+        "write": false
+      }
+    },
+    "start_config": {
+      "hibirdsdpdk": {
+        "update_config": true,
+        "rx_enable": true
+      },
+      "hdf": {
+        "write": true
+      }
+    },
+    "acquisition_config": {
+      "hibirdsdpdk": {
+        "update_config": true,
+        "rx_enable": false,
+        "proc_enable": true,
+        "rx_frames": "frames"
+      },
+      "hdf": {
+        "file": {
+          "path": "default_path"
+        },
+        "frames": "default_frames",
+        "acquisition_id": "default_acquisition_id",
+        "write": false
+      }
+    }
+  }

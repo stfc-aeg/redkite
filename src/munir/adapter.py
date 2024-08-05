@@ -11,9 +11,10 @@ from odin.adapters.adapter import ApiAdapter
 from odin.adapters.parameter_tree import ParameterTreeError
 from odin.util import decode_request_body
 
+from .util import MunirError
 from .controller import MunirController
 from .fp_controller import MunirFpController
-from .util import MunirError
+
 
 
 class MunirAdapter(ApiAdapter):
@@ -31,12 +32,12 @@ class MunirAdapter(ApiAdapter):
         # Parse options from configuration
         fp_mode = bool(self.options.get('fp_mode', False))
 
+        for option in self.options:
+            logging.debug(f'option in options: {option}')
+
         # Create the controller instance
         if fp_mode:
-            ctrl_endpoints = self.options.get('ctrl_endpoints', '')
-            ctrl_timeout = float(self.options.get('ctrl_timeout', 1.0))
-            poll_interval = float(self.options.get('poll_interval', 1.0))
-            self.controller = MunirFpController(ctrl_endpoints, ctrl_timeout, poll_interval)
+            self.controller = MunirFpController(self.options)
         else:
             cmd_template = str(self.options.get('cmd_template', ''))
             timeout = float(self.options.get('timeout', 1.0))
@@ -92,7 +93,8 @@ class MunirAdapter(ApiAdapter):
 
         try:
             data = decode_request_body(request)
-            response = self.controller.set(path, data)
+            self.controller.set(path, data)
+            response = self.controller.get(path)
             status_code = 200
         except (ParameterTreeError, MunirError) as e:
             response = {'error': str(e)}
@@ -110,3 +112,4 @@ class MunirAdapter(ApiAdapter):
         """
         logging.debug("MunirAdapter cleanup called")
         self.controller.cleanup()
+
