@@ -45,7 +45,6 @@ class MunirFpController:
 
     def set(self, path, data):
         """Set parameters in the parameter tree."""
-        logging.debug("Calling MunirFpController Set method")
         try:
             # Set the parameters in the parameter tree
             self.param_tree.set(path, data)
@@ -56,7 +55,6 @@ class MunirFpController:
                 self._handle_execution(subsystem)
 
         except ParameterTreeError as e:
-            # Raise a custom error if a parameter tree error occurs
             raise MunirFpControllerError(e)
         
     def parse_subsystem(self, path, data):
@@ -71,8 +69,6 @@ class MunirFpController:
             subsystem = path.split('/')[1]
             logging.debug(f"Subsystem derived from path: {subsystem}")
         else:
-            # Handle any other cases
-            subsystem = None
             logging.debug(f"Subsystem not determined from path: {path}")
         return subsystem
 
@@ -107,7 +103,6 @@ class MunirFpController:
                     # Reset the execute flag after successful execution
                     self.execute_flags[subsystem_name] = False
             else:
-                # Debug log if the subsystem is already executing
                 logging.debug(f"Cannot trigger execution for {subsystem_name} while acquisition is already running")       
 
 class MunirFpControllerError(Exception):
