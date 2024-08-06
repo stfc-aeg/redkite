@@ -8,7 +8,7 @@ class OdinData:
     A class to manage connections and interactions with Odin-Data C++ applications.
     """
 
-    def __init__(self, endpoint, config_path, timeout):
+    def __init__(self, endpoint, config_path, subsystem, timeout):
         """
         Initialize the OdinData connection.
 
@@ -23,8 +23,8 @@ class OdinData:
         self.config = {}
         self.msg_id = 0
         self.ctrl_timeout = timeout
-
-        self.load_config(config_path)
+        self.subsystem = subsystem
+        self.config = self.load_config(config_path)
 
     def _send_receive(self, msg_type, msg_val, params=None):
         """
@@ -55,15 +55,21 @@ class OdinData:
         """
         Load configuration from a JSON file.
 
-        :param config_file: Path to the JSON configuration file
+        :param path: Path to the JSON configuration file
+        :return: Configuration dictionary for the specified subsystem
         """
         try:
-            with open((f'{path}/odin_data_configs.json'), 'r') as file:
-                self.json_config = json.load(file)
-                logging.debug(self.json_config)
+            with open(f'{path}/odin_data_configs.json', 'r') as file:
+                json_config = json.load(file)
+                if self.subsystem in json_config:
+                    logging.debug(f'Loaded {self.subsystem} config subsection: {json_config[self.subsystem]}')
+                    return json_config[self.subsystem]
+                else:
+                    logging.error(f"No configuration found for subsystem: {self.subsystem}")
+                    return {}
         except Exception as e:
-            logging.error(f"Failed to load configuration file: {e}")
-            self.json_config = {}
+            logging.error(f"Failed to load configuration: {e}")
+            return {}
 
     def set_config(self, config):
         """
@@ -99,6 +105,7 @@ class OdinData:
             self.config = response['params']
         return self.config
 
+
     def create_acquisition(self, path, acquisition_id, frames):
         """
         Create an acquisition setup.
@@ -108,36 +115,23 @@ class OdinData:
         :param frames: Number of frames for the acquisition
         :return: True if the acquisition was set up successfully, False otherwise
         """
+        acquisition_config = self.config.get('acquisition_config', {}).copy()
 
-        # make setting of config generic, it needs to adapt to,different types of config
-        # json.loads string to dict 
-        common_config = {
-            "hibirdsdpdk": {
-                "update_config": True,
-                "rx_enable": False,
-                "proc_enable": True,
-                "rx_frames": frames
-            },
-            "hdf": {
-                "write": False
-            }
-        }
-
-        if not self.set_config(common_config):
+        plugin_name = None
+        for key in acquisition_config.keys():
+            if key != 'hdf':
+                plugin_name = key
+                break
+        
+        if plugin_name:
+            acquisition_config[plugin_name]['rx_frames'] = frames
+            acquisition_config['hdf']['file']['path'] = path
+            acquisition_config['hdf']['frames'] = frames
+            acquisition_config['hdf']['acquisition_id'] = acquisition_id
+        else:
+            logging.error("No valid acquisition plugin found in the configuration.")
             return False
-
-        acquisition_config = {
-            "hibirdsdpdk": common_config["hibirdsdpdk"],
-            "hdf": {
-                "file": {
-                    "path": path
-                },
-                "frames": frames,
-                "acquisition_id": acquisition_id,
-                "write": False
-            }
-        }
-
+        logging.debug(f'acquisition config: {acquisition_config}')
         return bool(self.set_config(acquisition_config))
 
     def start_acquisition(self):
@@ -149,16 +143,8 @@ class OdinData:
         if not self.stop_acquisition():
             return False
 
-        start_config = {
-            "hibirdsdpdk": {
-                "update_config": True,
-                "rx_enable": True
-            },
-            "hdf": {
-                "write": True
-            }
-        }
-
+        start_config = self.config.get('start_config', {})
+        logging.debug(f'Start config: {start_config}')
         return bool(self.set_config(start_config))
 
     def stop_acquisition(self):
@@ -167,18 +153,16 @@ class OdinData:
 
         :return: True if the acquisition was stopped successfully, False otherwise
         """
-        stop_config = {
-            "hibirdsdpdk": {
-                "update_config": True,
-                "rx_enable": False,
-                "proc_enable": True
-            },
-            "hdf": {
-                "write": False
-            }
-        }
-
+        stop_config = self.config.get('stop_config', {})
+        logging.debug(f'Stop config: {stop_config}')
         return bool(self.set_config(stop_config))
+
+    def close(self):
+        """
+        Close the ZMQ connection.
+        """
+        self.socket.close()
+        self.context.term()
 
     def close(self):
         """

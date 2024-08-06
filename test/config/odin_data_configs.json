@@ -1,5 +1,6 @@
 {
-    "common_config": {
+  "babyd": {
+    "acquisition_config": {
       "hibirdsdpdk": {
         "update_config": true,
         "rx_enable": false,
@@ -7,16 +8,11 @@
         "rx_frames": "frames"
       },
       "hdf": {
-        "write": false
-      }
-    },
-    "stop_config": {
-      "hibirdsdpdk": {
-        "update_config": true,
-        "rx_enable": false,
-        "proc_enable": true
-      },
-      "hdf": {
+        "file": {
+          "path": "path"
+        },
+        "frames": "frames",
+        "acquisition_id": "acquisition_id",
         "write": false
       }
     },
@@ -29,20 +25,15 @@
         "write": true
       }
     },
-    "acquisition_config": {
+    "stop_config": {
       "hibirdsdpdk": {
         "update_config": true,
         "rx_enable": false,
-        "proc_enable": true,
-        "rx_frames": "frames"
+        "proc_enable": true
       },
       "hdf": {
-        "file": {
-          "path": "default_path"
-        },
-        "frames": "default_frames",
-        "acquisition_id": "default_acquisition_id",
         "write": false
       }
     }
   }
+}

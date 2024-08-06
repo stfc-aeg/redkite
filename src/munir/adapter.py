@@ -16,14 +16,13 @@ from .controller import MunirController
 from .fp_controller import MunirFpController
 
 
-
 class MunirAdapter(ApiAdapter):
     """Munir adapter for HiBIRDS/DPDK control integration."""
 
     def __init__(self, **kwargs):
         """Initialise the adapter object.
 
-        :param kwargs: keyawrd argument list that is passed to superclass
+        :param kwargs: keyword argument list that is passed to superclass
                        init method to populate options dictionary
         """
         # Initalise super class
@@ -31,9 +30,6 @@ class MunirAdapter(ApiAdapter):
 
         # Parse options from configuration
         fp_mode = bool(self.options.get('fp_mode', False))
-
-        for option in self.options:
-            logging.debug(f'option in options: {option}')
 
         # Create the controller instance
         if fp_mode:

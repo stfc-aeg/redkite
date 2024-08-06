@@ -10,7 +10,7 @@ from .odin_data import OdinData
 class MunirManager:
     """Main class for the frame processor manager object."""
 
-    def __init__(self, ctrl_endpoints, ctrl_timeout, poll_interval, odin_data_config_path):
+    def __init__(self, ctrl_endpoints, ctrl_timeout, poll_interval, odin_data_config_path, subsystem):
         """
         Initialize the controller object.
 
@@ -24,7 +24,8 @@ class MunirManager:
         if len(self.endpoints) == 0:
             logging.error("Could not parse control endpoints from configuration")
         else:
-            self.odin_data_instances = [OdinData(endpoint, odin_data_config_path, ctrl_timeout) for endpoint in self.endpoints]
+            self.odin_data_instances = [OdinData(
+                endpoint, odin_data_config_path, subsystem, ctrl_timeout) for endpoint in self.endpoints]
         self.set_timeout(ctrl_timeout)
         self.ctrl_timeout = ctrl_timeout
         self._msg_id = 0
@@ -40,7 +41,7 @@ class MunirManager:
             return getattr(self, name)
 
         def set_arg(name, value):
-            logging.debug("Setting acquisition argument %s to %s", name, value)
+            logging.debug(f"Setting acquisition argument {name} to {value}")
             setattr(self, name, value)
 
         def arg_param(name):
@@ -64,7 +65,7 @@ class MunirManager:
             }
         })
 
-        logging.debug("Starting update task with poll interval %f secs", poll_interval)
+        logging.debug(f"Starting update task with poll interval {poll_interval} secs")
         self.update_task = PeriodicCallback(
             self._get_status, int(poll_interval * 1000)
         )
@@ -94,7 +95,7 @@ class MunirManager:
 
         :param value: value of the timeout set to set in seconds.
         """
-        logging.debug("MunirManager set_timeout called with value %f", value)
+        logging.debug(f"MunirManager set_timeout called with value {value}")
         self.timeout = value
         for odin_data in self.odin_data_instances:
             logging.debug(f'Setting timeout to: {value} with type: {type(value)}')
@@ -152,7 +153,7 @@ class MunirManager:
         # Create acquisition on all odin_data instances
         for odin_data in self.odin_data_instances:
             if not odin_data.create_acquisition(self.file_path, self.file_name, self.num_frames):
-                logging.error("Failed to create acquisition for endpoint %s", odin_data.endpoint)
+                logging.error(f"Failed to create acquisition for endpoint {odin_data.endpoint}")
                 all_success = False
 
         if not all_success:
@@ -161,7 +162,7 @@ class MunirManager:
         # Start acquisition on all odin_data instances
         for odin_data in self.odin_data_instances:
             if not odin_data.start_acquisition():
-                logging.error("Failed to start acquisition for endpoint %s", odin_data.endpoint)
+                logging.error(f"Failed to start acquisition for endpoint {odin_data.endpoint}")
                 all_success = False
 
         return all_success
@@ -178,7 +179,7 @@ class MunirManager:
 
         for odin_data in self.odin_data_instances:
             if not odin_data.stop_acquisition():
-                logging.error("Failed to stop acquisition for endpoint %s", odin_data.endpoint)
+                logging.error(f"Failed to stop acquisition for endpoint {odin_data.endpoint}")
                 all_success = False
 
         return all_success
