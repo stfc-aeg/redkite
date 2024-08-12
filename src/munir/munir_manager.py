@@ -165,6 +165,9 @@ class MunirManager:
                 logging.error(f"Failed to start acquisition for endpoint {odin_data.endpoint}")
                 all_success = False
 
+        #Force a status update so that status/executing and status/frames_written are accurate
+        self._get_status()
+
         return all_success
 
     def stop_acquisition(self, *args):
@@ -181,5 +184,6 @@ class MunirManager:
             if not odin_data.stop_acquisition():
                 logging.error(f"Failed to stop acquisition for endpoint {odin_data.endpoint}")
                 all_success = False
-
+                
+        self._get_status()
         return all_success
