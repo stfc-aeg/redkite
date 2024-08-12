@@ -50,12 +50,16 @@ class MunirFpController:
             self.param_tree.set(path, data)
             subsystem = self.parse_subsystem(path, data)
 
+            # Ensure the path always ends with a '/'
+            if not path.endswith('/'):
+                path += '/'
+            logging.debug(f'path: {path}')
             if path == 'execute/' and data.get(subsystem, False):
                 logging.debug("Calling _handle_execution ")
                 self._handle_execution(subsystem)
 
         except ParameterTreeError as e:
-            raise MunirFpControllerError(e)
+            raise MunirFpControllerError(e) 
         
     def parse_subsystem(self, path, data):
         """ Extract the subsystem name from the request sent to the SET method"""
