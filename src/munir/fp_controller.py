@@ -1,10 +1,10 @@
-import logging
 from functools import partial
+import logging
 
-from .util import MunirError
-from .munir_manager import MunirManager
-from odin.adapters.parameter_tree import ParameterTree
 from odin.adapters.parameter_tree import ParameterTreeError
+from odin.adapters.parameter_tree import ParameterTree
+
+from .munir_manager import MunirManager
 
 
 class MunirFpController:
@@ -17,21 +17,17 @@ class MunirFpController:
         ctrl_timeout = float(options.get('ctrl_timeout', 1.0))
         poll_interval = float(options.get('poll_interval', 1.0))
         odin_data_config_path = options.get('odin_data_config_path')
-        
         subsystems = [sub.strip() for sub in (options.get('subsystems')).split(',')]
-        logging.debug(f'Subsystems detected: {subsystems}')
+        self.execute_flags = {name: False for name in subsystems}
         
-        for subsystem in subsystems:
-            endpoints = options.get((f'{subsystem}_endpoints'), '')
+        for subsystem in subsystems if subsystems != [''] else []:
+            endpoints = options.get(f'{subsystem}_endpoints', '')
             logging.debug(f"Endpoints for {subsystem}: {endpoints}")
 
             # Instantiate the manager for the subsystem
             self.munir_managers[subsystem] = MunirManager(
                 endpoints, ctrl_timeout, poll_interval, odin_data_config_path, subsystem)
         
-        # Initialize execute flags
-        self.execute_flags = {name: False for name in subsystems}
-
         # Setup parameter tree
         self.param_tree = ParameterTree({
             'subsystem_list': (lambda: [name for name in subsystems], None),
@@ -46,34 +42,35 @@ class MunirFpController:
     def set(self, path, data):
         """Set parameters in the parameter tree."""
         try:
-            # Set the parameters in the parameter tree
-            self.param_tree.set(path, data)
-            subsystem = self.parse_subsystem(path, data)
-
             # Ensure the path always ends with a '/'
             if not path.endswith('/'):
                 path += '/'
-            logging.debug(f'path: {path}')
+
+            self.param_tree.set(path, data)
+            
+            subsystem = self.parse_subsystem(path, data)
             if path == 'execute/' and data.get(subsystem, False):
-                logging.debug("Calling _handle_execution ")
                 self._handle_execution(subsystem)
 
         except ParameterTreeError as e:
-            raise MunirFpControllerError(e) 
+            logging.error(e)
         
     def parse_subsystem(self, path, data):
-        """ Extract the subsystem name from the request sent to the SET method"""
+        """ Extract the subsystem name from the request sent to the SET method.
+
+        :param path: Path on the param_tree sent to the set method 
+        :param data: Dict containing param's and their corresponding values to be set
+        :return: string containing the name of the subsystem being targetted in the request 
+        """
         subsystem = None
         if path == 'execute/':
             # If the path is 'execute/', the key of the data will be the subsystem name
             subsystem = list(data.keys())[0]
-            logging.debug(f"Subsystem derived from execute path: {subsystem}")
         elif path.startswith('subsystems/'):
             # If the path starts with 'subsystems', use the second part of the path
             subsystem = path.split('/')[1]
-            logging.debug(f"Subsystem derived from path: {subsystem}")
         else:
-            logging.debug(f"Subsystem not determined from path: {path}")
+            logging.error(f"Subsystem not determined from path: {path}")
         return subsystem
 
     def set_execute(self, subsystem_name, value):
@@ -84,10 +81,9 @@ class MunirFpController:
         """
         if value:
             if not self.munir_managers[subsystem_name]._is_executing():
-                logging.debug(f"Trigger execution set for {subsystem_name}")
                 self.execute_flags[subsystem_name] = True
             else:
-                raise MunirError(f"Cannot trigger execution for {subsystem_name} while acquisition is already running")
+                logging.error(f"Cannot trigger execution for {subsystem_name} while acquisition is already running")
         else:
             self.execute_flags[subsystem_name] = False
 
@@ -100,14 +96,13 @@ class MunirFpController:
             manager = self.munir_managers[subsystem_name]
             # Ensure the manager is not already executing
             if not manager._is_executing():
-                logging.debug(f"Calling execute_acquisition for subsystem {subsystem_name}")
                 # Trigger the execution process
                 success = manager.execute_acquisition()
                 if success:
                     # Reset the execute flag after successful execution
                     self.execute_flags[subsystem_name] = False
             else:
-                logging.debug(f"Cannot trigger execution for {subsystem_name} while acquisition is already running")       
+                logging.error(f"Cannot trigger execution for {subsystem_name} while acquisition is already running")       
 
 class MunirFpControllerError(Exception):
     pass

@@ -1,10 +1,10 @@
+from tornado.ioloop import PeriodicCallback
+from functools import partial
 import logging
 import os
 
-from functools import partial
-from tornado.ioloop import PeriodicCallback
 from odin.adapters.parameter_tree import ParameterTree
-from .odin_data import OdinData
+from .odin_data_util import OdinData
 
 
 class MunirManager:
@@ -28,7 +28,6 @@ class MunirManager:
                 endpoint, odin_data_config_path, subsystem, ctrl_timeout) for endpoint in self.endpoints]
         self.set_timeout(ctrl_timeout)
         self.ctrl_timeout = ctrl_timeout
-        self._msg_id = 0
 
         # Initialize the state of control and status parameters
         self.file_path = '/tmp'
@@ -165,7 +164,6 @@ class MunirManager:
                 logging.error(f"Failed to start acquisition for endpoint {odin_data.endpoint}")
                 all_success = False
 
-        #Force a status update so that status/executing and status/frames_written are accurate
         self._get_status()
 
         return all_success
