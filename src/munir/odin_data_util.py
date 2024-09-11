@@ -62,7 +62,6 @@ class OdinData:
             with open(f'{path}/odin_data_configs.json', 'r') as file:
                 json_config = json.load(file)
                 if self.subsystem in json_config:
-                    logging.debug(f'Loaded {self.subsystem} config subsection: {json_config[self.subsystem]}')
                     return json_config[self.subsystem]
                 else:
                     logging.error(f"No configuration found for subsystem: {self.subsystem}")

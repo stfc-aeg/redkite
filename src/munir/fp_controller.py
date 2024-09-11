@@ -93,7 +93,7 @@ class MunirFpController:
         :param subsystem_name: Name of the subsystem 
         """
         if self.execute_flags.get(subsystem_name, False):
-            manager = self.munir_managers[subsystem_name]
+            manager: MunirManager = self.munir_managers[subsystem_name]
             # Ensure the manager is not already executing
             if not manager._is_executing():
                 # Trigger the execution process
