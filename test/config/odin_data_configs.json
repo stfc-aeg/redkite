@@ -1,7 +1,7 @@
 {
   "babyd": {
     "acquisition_config": {
-      "hibirdsdpdk": {
+      "Babyd": {
         "update_config": true,
         "rx_enable": false,
         "proc_enable": true,
@@ -17,7 +17,7 @@
       }
     },
     "start_config": {
-      "hibirdsdpdk": {
+      "Babyd": {
         "update_config": true,
         "rx_enable": true
       },
@@ -26,7 +26,7 @@
       }
     },
     "stop_config": {
-      "hibirdsdpdk": {
+      "Babyd": {
         "update_config": true,
         "rx_enable": false,
         "proc_enable": true

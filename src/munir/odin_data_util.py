@@ -1,14 +1,15 @@
 import logging
 import zmq
 import json
-from datetime import datetime
+from datetime import datetime, time
+from time import sleep
 
 class OdinData:
     """
     A class to manage connections and interactions with Odin-Data C++ applications.
     """
 
-    def __init__(self, endpoint, config_path, subsystem, timeout):
+    def __init__(self, endpoint, config_path, subsystem, timeout, liveivew_control):
         """
         Initialize the OdinData connection.
 
@@ -25,6 +26,10 @@ class OdinData:
         self.ctrl_timeout = timeout
         self.subsystem = subsystem
         self.config = self.load_config(config_path)
+        self.lv = liveivew_control
+        logging.debug(f"Liveview control for {self.subsystem} {'enabled' if self.lv else 'disabled'}")
+        if self.lv:
+            self.start_lv()
 
     def _send_receive(self, msg_type, msg_val, params=None):
         """
@@ -108,12 +113,17 @@ class OdinData:
     def create_acquisition(self, path, acquisition_id, frames):
         """
         Create an acquisition setup.
+        
 
         :param path: File path for the acquisition
         :param acquisition_id: ID for the acquisition
         :param frames: Number of frames for the acquisition
         :return: True if the acquisition was set up successfully, False otherwise
         """
+        if not self.stop_acquisition():
+            return False
+        # allow time for config to propogate in odin_data
+        sleep(0.01)
         acquisition_config = self.config.get('acquisition_config', {}).copy()
 
         plugin_name = None
@@ -139,8 +149,8 @@ class OdinData:
 
         :return: True if the acquisition was started successfully, False otherwise
         """
-        if not self.stop_acquisition():
-            return False
+        # if not self.stop_acquisition():
+        #     return False
 
         start_config = self.config.get('start_config', {})
         logging.debug(f'Start config: {start_config}')
@@ -156,12 +166,24 @@ class OdinData:
         logging.debug(f'Stop config: {stop_config}')
         return bool(self.set_config(stop_config))
 
-    def close(self):
-        """
-        Close the ZMQ connection.
-        """
-        self.socket.close()
-        self.context.term()
+    def start_lv(self):
+        """Start lv"""
+        if self.lv:
+            if not self.stop_acquisition():
+                return False
+            # allow time for config to propogate in odin_data
+            sleep(0.01)
+            arm_config = self.config.get('arm_config')
+            logging.debug(f'arm: {arm_config}')
+            if not (self.set_config(arm_config)):
+                return False
+            # allow time for config to propogate in odin_data
+            sleep(0.01)
+            lv_config = self.config.get('lv_config')
+            logging.debug(f'lv: {lv_config}')
+            return bool(self.set_config(lv_config))
+        else:
+            logging.error(f"Liveview control is disabled")
 
     def close(self):
         """

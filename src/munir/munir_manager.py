@@ -10,7 +10,7 @@ from .odin_data_util import OdinData
 class MunirManager:
     """Main class for the frame processor manager object."""
 
-    def __init__(self, ctrl_endpoints, ctrl_timeout, poll_interval, odin_data_config_path, subsystem):
+    def __init__(self, ctrl_endpoints, ctrl_timeout, poll_interval, odin_data_config_path, liveivew_control, subsystem):
         """
         Initialize the controller object.
 
@@ -19,18 +19,19 @@ class MunirManager:
         :param poll_interval: Poll interval for status updates
         """
         self.endpoints = [ep.strip() for ep in ctrl_endpoints.split(',')]
+        self.lv = liveivew_control
+        self.ctrl_timeout = ctrl_timeout
 
         # Create OdinData instances for each endpoint
         if len(self.endpoints) == 0:
             logging.error("Could not parse control endpoints from configuration")
         else:
             self.odin_data_instances = [OdinData(
-                endpoint, odin_data_config_path, subsystem, ctrl_timeout) for endpoint in self.endpoints]
+                endpoint, odin_data_config_path, subsystem, ctrl_timeout, liveivew_control) for endpoint in self.endpoints]
         self.set_timeout(ctrl_timeout)
-        self.ctrl_timeout = ctrl_timeout
 
         # Initialize the state of control and status parameters
-        self.file_path = '/tmp'
+        self.file_path = '/tmp/'
         self.file_name = 'test'
         self.num_frames = 1000
         self.num_batches = 1
@@ -49,6 +50,7 @@ class MunirManager:
         self.param_tree = ParameterTree({
             'endpoints': (lambda: self.endpoints, None),
             'stop_execute': (lambda: None, self.stop_acquisition),
+            'start_lv_frames':(lambda: None, self.start_lv_frames),
             'timeout': (lambda: self.ctrl_timeout, self.set_timeout),
             'args': {
                 arg: arg_param(arg) for arg in [
@@ -167,6 +169,13 @@ class MunirManager:
         self._get_status()
 
         return all_success
+
+    def start_lv_frames(self, *args):
+        if self.lv:
+            for odin_data in self.odin_data_instances:
+                odin_data.start_lv()
+        else:
+            logging.error(f"Liveview control is disabled")
 
     def stop_acquisition(self, *args):
         """

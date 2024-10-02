@@ -8,15 +8,17 @@ from .munir_manager import MunirManager
 
 
 class MunirFpController:
-    """Class to handle the instantiation of MunirManagers to control the frame-processor/odin-data 
-       for different subsystems and their endpoints, and provide a central location for their 
-       parameter trees to be accessed from."""
+    """ Class to handle the instantiation of MunirManagers to control the frame-processor/odin-data 
+        for different subsystems and their endpoints, and provide a central location for their 
+        parameter trees to be accessed from.
+    """
     
     def __init__(self, options: dict):
         self.munir_managers = {}
         ctrl_timeout = float(options.get('ctrl_timeout', 1.0))
         poll_interval = float(options.get('poll_interval', 1.0))
         odin_data_config_path = options.get('odin_data_config_path')
+        liveview_control = bool(int(options.get('liveview_control', 0)))
         subsystems = [sub.strip() for sub in (options.get('subsystems')).split(',')]
         self.execute_flags = {name: False for name in subsystems}
         
@@ -26,8 +28,8 @@ class MunirFpController:
 
             # Instantiate the manager for the subsystem
             self.munir_managers[subsystem] = MunirManager(
-                endpoints, ctrl_timeout, poll_interval, odin_data_config_path, subsystem)
-        
+                endpoints, ctrl_timeout, poll_interval, odin_data_config_path, liveview_control, subsystem)
+
         # Setup parameter tree
         self.param_tree = ParameterTree({
             'subsystem_list': (lambda: [name for name in subsystems], None),
@@ -54,7 +56,7 @@ class MunirFpController:
 
         except ParameterTreeError as e:
             logging.error(e)
-        
+
     def parse_subsystem(self, path, data):
         """ Extract the subsystem name from the request sent to the SET method.
 
@@ -62,6 +64,10 @@ class MunirFpController:
         :param data: Dict containing param's and their corresponding values to be set
         :return: string containing the name of the subsystem being targetted in the request 
         """
+
+        ## Extract subsystem name from data as well as path, refactor to allow for
+        # setting of dict of params in one go 
+
         subsystem = None
         if path == 'execute/':
             # If the path is 'execute/', the key of the data will be the subsystem name
