@@ -12,7 +12,7 @@ class MunirManager:
 
     def __init__(self, ctrl_endpoints, ctrl_timeout, poll_interval, odin_data_config_path, liveivew_control, subsystem):
         """
-        Initialize the controller object.
+        Initialise the controller object.
 
         :param ctrl_endpoints: Comma-separated list of control endpoints
         :param ctrl_timeout: Timeout value for control operations
@@ -30,7 +30,7 @@ class MunirManager:
                 endpoint, odin_data_config_path, subsystem, ctrl_timeout, liveivew_control) for endpoint in self.endpoints]
         self.set_timeout(ctrl_timeout)
 
-        # Initialize the state of control and status parameters
+        # Initialise the state of control and status parameters
         self.file_path = '/tmp/'
         self.file_name = 'test'
         self.num_frames = 1000
@@ -72,10 +72,10 @@ class MunirManager:
         )
         self.update_task.start()
 
-    def initialize(self):
-        """Initialize the controller instance.
+    def initialise(self):
+        """Initialise the controller instance.
 
-        This method initializes the controller instance if necessary.
+        This method initialises the controller instance if necessary.
         """
         pass
 

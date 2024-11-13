@@ -4,22 +4,25 @@ import json
 from datetime import datetime, time
 from time import sleep
 
+from .monitored_ipc_channel import MonitoredIpcChannel
+
+from odin_data.control.ipc_channel import IpcChannel
+from odin_data.control.ipc_message import IpcMessage
+
 class OdinData:
     """
-    A class to manage connections and interactions with Odin-Data C++ applications.
+    A class to manage a connection and interactions with an Odin-Data C++ application instance.
     """
 
     def __init__(self, endpoint, config_path, subsystem, timeout, liveivew_control):
         """
-        Initialize the OdinData connection.
+        Initialise the OdinData connection.
 
-        :param endpoint: ZMQ endpoint to connect to
+        :param endpoint: IpcChannel endpoint to connect to
         """
         self.endpoint = endpoint
-        self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.DEALER)
-        self.socket.connect(endpoint)
-        self.zmq_id = self.socket.getsockopt(zmq.IDENTITY)
+        self.channel = MonitoredIpcChannel(IpcChannel.CHANNEL_TYPE_DEALER, endpoint)
+        self.channel.connect(endpoint)
         self.status = {}
         self.config = {}
         self.msg_id = 0
@@ -33,28 +36,43 @@ class OdinData:
 
     def _send_receive(self, msg_type, msg_val, params=None):
         """
-        Send a message to the Odin-Data application and receive the response.
+        Send a message to the Odin-Data application and receive and filter any responses.
 
         :param msg_type: Type of the message
         :param msg_val: Value of the message
         :param params: Additional parameters for the message
         :return: Response from the Odin-Data application
         """
-        self.msg_id += 1
-        message = {
-            'msg_type': msg_type,
-            'msg_val': msg_val,
-            'timestamp': datetime.now().isoformat(),
-            'id': self.msg_id,
-            'params': params or {}
-        }
-
-        self.socket.send_json(message)
-        if self.socket.poll(int(self.ctrl_timeout*1000)):
-            return self.socket.recv_json()
-        else:
-            logging.error(f"No response from {self.endpoint} within timeout of: {self.ctrl_timeout}s .")
+        #Use the MonitoredIpcChannel function to use the monitor_socket to check for socket connection status
+        if not self.channel.check_connection():
+            # Debug no conneciton, and return an empty response
+            logging.error(f"Cannot send message to {self.endpoint}, socket is disconnected.")
             return {}
+        
+        # Build IpcMessage and send using IpcChannel send funciton
+        self.msg_id += 1
+        message = IpcMessage(msg_type=msg_type, msg_val=msg_val, id=self.msg_id)
+        if params:
+            message.set_params(params)
+        self.channel.send(message.encode())
+
+        # Recevie all data on the socket for up to a cfg defined timeout or until no data:
+        while self.channel.poll(int(self.ctrl_timeout * 1000)) == IpcChannel.POLLIN:
+            # procoess responses until response containing last msg_id sent is found and discard the rest
+            response_data = self.channel.recv()
+            response = IpcMessage(from_str=response_data)
+            if response.is_valid():
+                if response.attrs.get('id') == self.msg_id:
+                    return response.attrs
+                else:
+                    logging.warning(f"Received message with id of: {response.attrs.get('id')} when last sent was: {self.msg_id} | Dropping message" )
+            else:
+                logging.error("Invalid response received")
+                return {}
+        logging.error(f"No response from {self.endpoint} within timeout of: {self.ctrl_timeout}s.")
+        return {}
+        
+        # using get_socket_monitor to poll for when the connection is re-established. 
         
     def load_config(self, path):
         """
@@ -83,7 +101,7 @@ class OdinData:
         :return: Response from the Odin-Data application
         """
         response = self._send_receive('cmd', 'configure', config)
-        if response.get('msg_type') == 'ack':
+        if response.get('msg_type') == IpcMessage.ACK:
             self.config.update(config)
         return response
 
@@ -95,6 +113,7 @@ class OdinData:
         """
         response = self._send_receive('cmd', 'status')
         if 'params' in response:
+            logging.debug(f"Internal MSG ID: {self.msg_id} | Recieved MSG ID: {response['id']}")
             self.status = response['params']
         return self.status
 
@@ -189,5 +208,4 @@ class OdinData:
         """
         Close the ZMQ connection.
         """
-        self.socket.close()
-        self.context.term()
+        self.channel.close()

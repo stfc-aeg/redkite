@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 
 !munir/test/static/build/
+!munir/test/static/build/**
