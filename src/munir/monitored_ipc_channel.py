@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 import zmq
 from zmq.utils.monitor import parse_monitor_message
 from zmq.eventloop.zmqstream import ZMQStream
@@ -14,7 +16,7 @@ class MonitoredIpcChannel(IpcChannel):
         # Use the tornado IOLoop
         self._ioloop = ioloop.IOLoop.current()
         self.connection_status = False
-        
+       
         context = context or zmq.Context.instance()
         super().__init__(channel_type, endpoint, context, identity)
         
@@ -40,8 +42,7 @@ class MonitoredIpcChannel(IpcChannel):
                 logging.info("Socket connection established.")
             self.connection_status = True
         elif event == IpcChannel.EVENT_DISCONNECTED:
-            if self.connection_status:
-                logging.warning("Socket connection lost.")
+            logging.warning("Socket connection lost.")
             self.connection_status = False
 
     def check_connection(self):
