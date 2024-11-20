@@ -1,0 +1,39 @@
+{
+  "babyd": {
+    "acquisition_config": {
+      "Babyd": {
+        "update_config": true,
+        "rx_enable": false,
+        "proc_enable": true,
+        "rx_frames": "frames"
+      },
+      "hdf": {
+        "file": {
+          "path": "path"
+        },
+        "frames": "frames",
+        "acquisition_id": "acquisition_id",
+        "write": false
+      }
+    },
+    "start_config": {
+      "Babyd": {
+        "update_config": true,
+        "rx_enable": true
+      },
+      "hdf": {
+        "write": true
+      }
+    },
+    "stop_config": {
+      "Babyd": {
+        "update_config": true,
+        "rx_enable": false,
+        "proc_enable": true
+      },
+      "hdf": {
+        "write": false
+      }
+    }
+  }
+}

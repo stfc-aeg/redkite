@@ -1,245 +1,114 @@
-import logging
-import os
-
 from functools import partial
-from tornado.ioloop import PeriodicCallback
+import logging
+
+from odin.adapters.parameter_tree import ParameterTreeError
 from odin.adapters.parameter_tree import ParameterTree
-from .util import MunirError
-from .odin_data import OdinData
+
+from .munir_manager import MunirManager
 
 
 class MunirFpController:
-    """Main class for the frame processor controller object."""
+    """ Class to handle the instantiation of MunirManagers to control the frame-processor/odin-data 
+        for different subsystems and their endpoints, and provide a central location for their 
+        parameter trees to be accessed from.
+    """
+    
+    def __init__(self, options: dict):
+        self.munir_managers = {}
+        ctrl_timeout = float(options.get('ctrl_timeout', 1.0))
+        poll_interval = float(options.get('poll_interval', 1.0))
+        odin_data_config_path = options.get('odin_data_config_path')
+        liveview_control = bool(int(options.get('liveview_control', 0)))
+        subsystems = [sub.strip() for sub in (options.get('subsystems')).split(',')]
+        self.execute_flags = {name: False for name in subsystems}
+        
+        for subsystem in subsystems if subsystems != [''] else []:
+            endpoints = options.get(f'{subsystem}_endpoints', '')
+            logging.debug(f"Endpoints for {subsystem}: {endpoints}")
 
-    def __init__(self, ctrl_endpoints, ctrl_timeout, poll_interval):
-        """
-        Initialize the controller object.
+            # Instantiate the manager for the subsystem
+            self.munir_managers[subsystem] = MunirManager(
+                endpoints, ctrl_timeout, poll_interval, odin_data_config_path, liveview_control, subsystem)
 
-        :param ctrl_endpoints: Comma-separated list of control endpoints
-        :param ctrl_timeout: Timeout value for control operations
-        :param poll_interval: Poll interval for status updates
-        """
-        self.endpoints = [ep.strip() for ep in ctrl_endpoints.split(',')]
-
-        # Create OdinData instances for each endpoint
-        if len(self.endpoints) == 0:
-            logging.error("Could not parse control endpoints from configuration")
-        else:
-            self.odin_data_instances = [OdinData(endpoint) for endpoint in self.endpoints]
-        self.set_timeout(1.0)
-
-        self.ctrl_timeout = ctrl_timeout
-        self._msg_id = 0
-
-        # Initialize the state of control and status parameters
-        self.do_execute = False
-        self.file_path = '/tmp'
-        self.file_name = 'test'
-        self.num_frames = 1000
-        self.num_batches = 1
-        self.fp_status = [{}] * len(self.endpoints)
-
-        def get_arg(name):
-            return getattr(self, name)
-
-        def set_arg(name, value):
-            logging.debug("Setting acquisition argument %s to %s", name, value)
-            setattr(self, name, value)
-
-        def arg_param(name):
-            return (partial(get_arg, name), partial(set_arg, name))
-
+        # Setup parameter tree
         self.param_tree = ParameterTree({
-            'endpoints': (lambda: self.endpoints, None),
-            'execute': (lambda: self.do_execute, self.set_execute),
-            'stop_execute': (lambda: None, self.stop_acquisition),
-            'timeout': (lambda: self.timeout, self.set_timeout),
-            'args': {
-                arg: arg_param(arg) for arg in [
-                    'file_path', 'file_name', 'num_frames', 'num_batches'
-                ]
-            },
-            'status': {
-                'executing': (self._is_executing, None),
-                'frames_written': (self._frames_written, None),
-            },
-            'frame_procs': {
-                'status': (lambda: self.fp_status, None),
-            }
+            'subsystem_list': (lambda: [name for name in subsystems], None),
+            'subsystems': {name: manager.param_tree for name, manager in self.munir_managers.items()},
+            'execute': {name: (lambda name=name: self.execute_flags[name], partial(self.set_execute, name)) for name in subsystems}
         })
 
-        logging.debug("Starting update task with poll interval %f secs", poll_interval)
-        self.update_task = PeriodicCallback(
-            self._get_status, int(poll_interval * 1000)
-        )
-        self.update_task.start()
-
-    def initialize(self):
-        """Initialize the controller instance.
-
-        This method initializes the controller instance if necessary.
-        """
-        pass
-
-    def cleanup(self):
-        """Clean up the controller instance.
-
-        This method cleans up the controller instances as necessary, allowing the adapter state to
-        be cleaned up correctly.
-        """
-        self.update_task.stop()
-        for odin_data in self.odin_data_instances:
-            odin_data.close()
-
     def get(self, path):
-        """Get values from the parameter tree.
-
-        This method returns values from the parameter tree to the adapter.
-
-        :param path: path to retrieve from tree
-        """
+        """Get the parameter tree."""
         return self.param_tree.get(path)
 
     def set(self, path, data):
-        """Set values in the parameter tree.
+        """Set parameters in the parameter tree."""
+        try:
+            # Ensure the path always ends with a '/'
+            if not path.endswith('/'):
+                path += '/'
 
-        This method sets values in the parameter tree. If a command execution was requested in the
-        data, trigger the execution.
+            self.param_tree.set(path, data)
+            
+            subsystem = self.parse_subsystem(path, data)
+            if path == 'execute/' and data.get(subsystem, False):
+                self._handle_execution(subsystem)
 
-        :param path: path of data to set in the tree
-        :param data: data to set in tree
+        except ParameterTreeError as e:
+            logging.error(e)
+
+    def parse_subsystem(self, path, data):
+        """ Extract the subsystem name from the request sent to the SET method.
+
+        :param path: Path on the param_tree sent to the set method 
+        :param data: Dict containing param's and their corresponding values to be set
+        :return: string containing the name of the subsystem being targetted in the request 
         """
-        # Update values in the tree at the specified path
-        self.param_tree.set(path, data)
 
-        # If the call included trigger an execution do so now all parameters have been updated.
-        if self.do_execute:
-            self.do_execute = False
-            self.execute_acquisition()
+        ## Extract subsystem name from data as well as path, refactor to allow for
+        # setting of dict of params in one go 
 
-        # Return updated values from the tree
-        return self.param_tree.get(path)
+        subsystem = None
+        if path == 'execute/':
+            # If the path is 'execute/', the key of the data will be the subsystem name
+            subsystem = list(data.keys())[0]
+        elif path.startswith('subsystems/'):
+            # If the path starts with 'subsystems', use the second part of the path
+            subsystem = path.split('/')[1]
+        else:
+            logging.error(f"Subsystem not determined from path: {path}")
+        return subsystem
 
-    def set_timeout(self, value):
-        """Set the command execution timeout.
+    def set_execute(self, subsystem_name, value):
+        """Set the command execution flag for a subsystem.
 
-        This setting method sets the command execution timeout in seconds.
-
-        :param value: value of the timeout set to set in seconds.
-        """
-        logging.debug("MunirFpController set_timeout called with value %f", value)
-        self.timeout = value
-        for odin_data in self.odin_data_instances:
-            logging.debug(f'Setting timout to:{value} with type:{type(value)}')
-            odin_data.ctrl_timeout = value
-
-    def set_execute(self, value):
-        """Set the command execution flag.
-
-        This setter method operates as an edge trigger, setting the internal do_execute flag if
-        a command is not already running. This flag is then used to trigger execution by the
-        set method once all parameters have been updated. This mechanism allows a single PUT request
-        to set any other parameters and trigger an execution.
-
+        :param subsystem_name: Name of the subsystem
         :param value: execution flag value to set (True triggers execution)
         """
-        logging.debug("MunirController set_execute called with value %s", value)
-
         if value:
-            if not self._is_executing():
-                logging.debug("Trigger acquisition execution")
-                self.do_execute = True
+            if not self.munir_managers[subsystem_name]._is_executing():
+                self.execute_flags[subsystem_name] = True
             else:
-                raise MunirError("Cannot trigger execution while acquisition is already running")
+                logging.error(f"Cannot trigger execution for {subsystem_name} while acquisition is already running")
+        else:
+            self.execute_flags[subsystem_name] = False
 
-    def _is_executing(self):
+    def _handle_execution(self, subsystem_name):
+        """Handle execution of acquisiton on a subsystem.
+
+        :param subsystem_name: Name of the subsystem 
         """
-        Check if the acquisition is currently executing.
+        if self.execute_flags.get(subsystem_name, False):
+            manager: MunirManager = self.munir_managers[subsystem_name]
+            # Ensure the manager is not already executing
+            if not manager._is_executing():
+                # Trigger the execution process
+                success = manager.execute_acquisition()
+                if success:
+                    # Reset the execute flag after successful execution
+                    self.execute_flags[subsystem_name] = False
+            else:
+                logging.error(f"Cannot trigger execution for {subsystem_name} while acquisition is already running")       
 
-        :return: True if executing, False otherwise
-        """
-        is_executing = False
-        for fp_status in self.fp_status:
-            if 'hdf' in fp_status:
-                is_executing |= fp_status['hdf'].get('writing', False)
-
-        return is_executing
-
-    def _frames_written(self):
-        """
-        Get the number of frames written so far.
-
-        :return: Number of frames written
-        """
-        frames_written = 0
-        for fp_status in self.fp_status:
-            if 'hdf' in fp_status:
-                frames_written += fp_status['hdf'].get('frames_written', 0)
-
-        return frames_written
-
-    def _next_msg_id(self):
-        """
-        Return the next IPC message ID to use.
-
-        :return: Next message ID
-        """
-        self._msg_id += 1
-        return self._msg_id
-
-    def _get_status(self):
-        """Get and display the current status of all connected odin-data instances.
-
-        This method sends a status request to each odin-data instance and updates the
-        internal fp_status list with the responses.
-        """
-        for idx, odin_data in enumerate(self.odin_data_instances):
-            self.fp_status[idx] = odin_data.get_status()
-
-    def execute_acquisition(self):
-        """
-        Execute the acquisition process.
-
-        This method sets up the configuration for acquisition and triggers the acquisition
-        on all connected odin-data instances.
-        """
-        if not os.path.exists(self.file_path):
-            os.makedirs(self.file_path)
-
-        logging.debug("Executing acquisition")
-
-        all_success = True
-
-        # Create acquisition on all odin_data instances
-        for odin_data in self.odin_data_instances:
-            if not odin_data.create_acquisition(self.file_path, self.file_name, self.num_frames):
-                logging.error("Failed to create acquisition for endpoint %s", odin_data.endpoint)
-                all_success = False
-
-        if not all_success:
-            return False
-
-        # Start acquisition on all odin_data instances
-        for odin_data in self.odin_data_instances:
-            if not odin_data.start_acquisition():
-                logging.error("Failed to start acquisition for endpoint %s", odin_data.endpoint)
-                all_success = False
-
-        return all_success
-
-    def stop_acquisition(self, *args):
-        """
-        Stop the acquisition process.
-
-        This method stops the acquisition on all connected odin-data instances.
-        """
-        logging.debug("Stopping acquisition")
-
-        all_success = True
-
-        for odin_data in self.odin_data_instances:
-            if not odin_data.stop_acquisition():
-                logging.error("Failed to stop acquisition for endpoint %s", odin_data.endpoint)
-                all_success = False
-
-        return all_success
+class MunirFpControllerError(Exception):
+    pass
