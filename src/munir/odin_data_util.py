@@ -1,12 +1,10 @@
 import logging
-import zmq
+from zmq.constants import Event
 import json
-from datetime import datetime, time
 from time import sleep
 
-from .monitored_ipc_channel import MonitoredIpcChannel
-
 from odin_data.control.ipc_channel import IpcChannel
+from odin_data.control.ipc_tornado_channel import IpcTornadoChannel
 from odin_data.control.ipc_message import IpcMessage
 
 class OdinData:
@@ -21,8 +19,10 @@ class OdinData:
         :param endpoint: IpcChannel endpoint to connect to
         """
         self.endpoint = endpoint
-        self.channel = MonitoredIpcChannel(IpcChannel.CHANNEL_TYPE_DEALER, endpoint)
-        self.channel.connect(endpoint)
+        self.channel = IpcTornadoChannel(IpcTornadoChannel.CHANNEL_TYPE_DEALER, endpoint)
+        self.channel.connect()
+        self.channel.register_monitor(self._handle_monitor_event)
+        self.connection_status = True
         self.status = {}
         self.config = {}
         self.msg_id = 0
@@ -33,6 +33,7 @@ class OdinData:
         logging.debug(f"Liveview control for {self.subsystem} {'enabled' if self.lv else 'disabled'}")
         if self.lv:
             self.start_lv()
+        
 
     def _send_receive(self, msg_type, msg_val, params=None):
         """
@@ -43,9 +44,7 @@ class OdinData:
         :param params: Additional parameters for the message
         :return: Response from the Odin-Data application
         """
-        #Use the MonitoredIpcChannel function to use the monitor_socket to check for socket connection status
-        if not self.channel.check_connection():
-            # Debug no conneciton, and return an empty response
+        if not self.connection_status:
             logging.error(f"Cannot send message to {self.endpoint}, socket is disconnected.")
             return {}
         
@@ -71,9 +70,21 @@ class OdinData:
                 return {}
         logging.error(f"No response from {self.endpoint} within timeout of: {self.ctrl_timeout}s.")
         return {}
-        
-        # using get_socket_monitor to poll for when the connection is re-established. 
-        
+
+    def _handle_monitor_event(self, event_msg):
+        """
+        Handle events from the monitor socket.
+        """
+        event = event_msg["event"]
+        logging.debug(f"Event ID received: {event} | {Event(event).name}")
+        if event == IpcChannel.EVENT_ACCEPTED:
+            if not self.connection_status:
+                logging.info("Socket connection established.")
+            self.connection_status = True
+        elif event == IpcChannel.EVENT_DISCONNECTED:
+            logging.warning("Socket connection lost.")
+            self.connection_status = False
+
     def load_config(self, path):
         """
         Load configuration from a JSON file.
